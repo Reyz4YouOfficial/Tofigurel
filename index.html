@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Figure Studio</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background-color: #020617; font-family: sans-serif; }
+        .glass { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); }
+        .spinner { border: 3px solid rgba(255,255,255,0.1); border-top: 3px solid #3b82f6; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="text-slate-200 min-h-screen p-4">
+    <div class="max-w-6xl mx-auto py-10">
+        <header class="text-center mb-10">
+            <h1 class="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-cyan-400">AI Figure Studio</h1>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div class="glass p-6 rounded-2xl">
+                <h2 class="text-xl font-semibold mb-4 text-blue-400 border-b border-slate-700 pb-2">1. Input Photo</h2>
+                <div id="drop-zone" class="border-2 border-dashed border-slate-600 rounded-xl h-64 flex flex-col items-center justify-center cursor-pointer bg-slate-800/30 hover:bg-slate-800/50 transition-all relative overflow-hidden">
+                    <div id="drop-text" class="text-center">
+                        <p class="text-4xl mb-2">🖼️</p>
+                        <p class="text-sm">Click or Drop image here</p>
+                    </div>
+                    <img id="preview-in" class="absolute inset-0 m-auto hidden h-full w-full object-contain p-2">
+                    <input type="file" id="file-input" class="hidden" accept="image/*">
+                </div>
+                
+                <textarea id="prompt-box" class="w-full mt-4 bg-slate-900 border border-slate-700 rounded-xl p-4 text-xs text-slate-400 h-32 focus:ring-1 focus:ring-blue-500 outline-none">create a 1/7 scale commercialized figurine of the characters in the picture, in a realistic style, in a real environment. The figurine is placed on a computer desk. The figurine has a round transparent acrylic base, with no text on the base. The content on the computer screen is the Zbrush modeling process of this figurine. Next to the computer screen is a BANDAI-style toy packaging box printed with the original artwork. The packaging features two-dimensional flat illustrations.</textarea>
+                
+                <button id="btn-gen" class="w-full mt-4 bg-blue-600 hover:bg-blue-500 py-3 rounded-xl font-bold transition-all active:scale-95">GENERATE FIGURE</button>
+            </div>
+
+            <div class="glass p-6 rounded-2xl flex flex-col">
+                <h2 class="text-xl font-semibold mb-4 text-emerald-400 border-b border-slate-700 pb-2">2. AI Result</h2>
+                <div class="flex-grow bg-slate-950 rounded-xl border border-slate-800 flex items-center justify-center relative min-h-[350px]">
+                    <div id="loader" class="hidden text-center">
+                        <div class="spinner mx-auto mb-2"></div>
+                        <p class="text-sm text-blue-400">AI is sculpting...</p>
+                    </div>
+                    <p id="empty-hint" class="text-slate-600 text-sm">Hasil akan muncul di sini</p>
+                    <img id="result-img" class="hidden max-h-full rounded-lg shadow-2xl">
+                </div>
+                <button id="btn-down" class="hidden mt-4 border border-emerald-500 text-emerald-500 py-2 rounded-lg hover:bg-emerald-500/10 transition-all">Download PNG</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+        const previewIn = document.getElementById('preview-in');
+        const resultImg = document.getElementById('result-img');
+        const loader = document.getElementById('loader');
+        const btnGen = document.getElementById('btn-gen');
+
+        dropZone.onclick = () => fileInput.click();
+        dropZone.ondragover = (e) => { e.preventDefault(); dropZone.classList.add('border-blue-500'); };
+        dropZone.ondragleave = () => { dropZone.classList.remove('border-blue-500'); };
+        dropZone.ondrop = (e) => {
+            e.preventDefault();
+            handleFile(e.dataTransfer.files[0]);
+        };
+        fileInput.onchange = (e) => handleFile(e.target.files[0]);
+
+        function handleFile(file) {
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                previewIn.src = e.target.result;
+                previewIn.classList.remove('hidden');
+                document.getElementById('drop-text').classList.add('hidden');
+            };
+            reader.readAsDataURL(file);
+        }
+
+        btnGen.onclick = async () => {
+            if (!fileInput.files[0] && !previewIn.src) return alert("Pilih foto!");
+            
+            btnGen.disabled = true;
+            loader.classList.remove('hidden');
+            resultImg.classList.add('hidden');
+            document.getElementById('empty-hint').classList.add('hidden');
+
+            const formData = new FormData();
+            // Ambil file dari input atau drag-drop
+            const fileToSend = fileInput.files[0] || await (await fetch(previewIn.src)).blob();
+            formData.append('image', fileToSend);
+            formData.append('prompt', document.getElementById('prompt-box').value);
+
+            try {
+                const res = await fetch('/api/generate', { method: 'POST', body: formData });
+                const data = await res.json();
+                if (data.success) {
+                    resultImg.src = data.url;
+                    resultImg.classList.remove('hidden');
+                    document.getElementById('btn-down').classList.remove('hidden');
+                } else { alert("Error: " + data.message); }
+            } catch (err) { alert("Server Error"); }
+            finally { btnGen.disabled = false; loader.classList.add('hidden'); }
+        };
+
+        document.getElementById('btn-down').onclick = () => {
+            const a = document.createElement('a');
+            a.href = resultImg.src;
+            a.download = "figure.png";
+            a.click();
+        };
+    </script>
+</body>
+</html>
