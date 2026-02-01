@@ -1,0 +1,11 @@
+{
+  "functions": {
+    "generate.js": {
+      "runtime": "vercel-node@latest"
+    }
+  },
+  "rewrites": [
+    { "source": "/api/generate", "destination": "/generate.js" },
+    { "source": "/", "destination": "/index.html" }
+  ]
+}
